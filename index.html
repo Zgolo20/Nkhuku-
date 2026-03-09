@@ -992,7 +992,7 @@ async function popFlockSels(){
 // ════════════════════════════════════════════════════
 async function loadDash(){
   if(!CU)return;
-  document.getElementById('greeting').textContent='Good morning, '+(CP?.full_name?.split(' ')[0]||'Farmer')+' 👋';
+  document.getElementById('greeting').textContent=''+(()=>{const h=new Date().getHours();return h<12?'Good morning':h<17?'Good afternoon':'Good evening'})()+', '+(CP?.full_name?.split(' ')[0]||'Farmer')+' 👋';
   const[{data:fl},{data:vx},{data:fd},{data:nt}]=await Promise.all([
     sb.from('flocks').select('*').eq('user_id',CU.id).eq('active',true),
     sb.from('vaccines').select('*').eq('user_id',CU.id),
