@@ -488,6 +488,7 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
       <button class="nb hidden" id="n-av" onclick="sp('adm-vax')" data-page="adm-vax"><span class="ic">🩺</span>Vaccine Monitor</button>
       <button class="nb hidden" id="n-ab" onclick="om('m-broadcast')"><span class="ic">📣</span>Broadcast</button>
       <button class="nb hidden" id="n-al" onclick="sp('adm-audit')" data-page="adm-audit"><span class="ic">🔐</span>Audit Logs</button>
+      <button class="nb hidden" id="n-aact" onclick="sp('adm-activity')" data-page="adm-activity"><span class="ic">📡</span>Activity</button>
 
       <div class="nsec">Account</div>
       <button class="nb" onclick="showGate()"><span class="ic">⚙️</span>Admin Panel</button>
@@ -589,6 +590,7 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
           <div class="mcard" onclick="om2('egg')"><div class="mico">🥚</div><div class="mname">Egg Countdown</div><div class="mdesc">21-day incubation tracker</div><span class="marrow">→</span></div>
           <div class="mcard" onclick="om2('vax-sched')"><div class="mico">💉</div><div class="mname">Vaccine Schedule</div><div class="mdesc">Generate from hatch date</div><span class="marrow">→</span></div>
           <div class="mcard" onclick="om2('nutrition')"><div class="mico">🔬</div><div class="mname">Nutrition Guide</div><div class="mdesc">Feed types and protein ranges</div><span class="marrow">→</span></div>
+          <div class="mcard" onclick="om2('pnl')"><div class="mico">💰</div><div class="mname">Profit & Loss</div><div class="mdesc">Broiler & layer profitability</div><span class="marrow">→</span></div>
         </div>
       </div>
     </div>
@@ -909,11 +911,11 @@ function checkGate(){
 function closeGate(){document.getElementById('admin-gate').style.display='none';document.getElementById('gate-pw').value='';document.getElementById('gerr').style.display='none';}
 function showAdminNav(){
   document.getElementById('admin-nsec').classList.remove('hidden');
-  ['n-ao','n-au','n-af','n-av','n-ab','n-al'].forEach(id=>document.getElementById(id)?.classList.remove('hidden'));
+  ['n-ao','n-au','n-af','n-av','n-ab','n-al','n-aact'].forEach(id=>document.getElementById(id)?.classList.remove('hidden'));
 }
 function hideAdminNav(){
   document.getElementById('admin-nsec').classList.add('hidden');
-  ['n-ao','n-au','n-af','n-av','n-ab','n-al'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
+  ['n-ao','n-au','n-af','n-av','n-ab','n-al','n-aact'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
   adminUnlocked=false;
 }
 
@@ -927,6 +929,7 @@ function sp(id){
   if(el)el.classList.add('active');
   document.querySelectorAll('.nb[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===id));
   curPage=id;
+  if(id==='adm-activity')loadAdminActivity();
   if(!id.startsWith('adm'))lastPage=id;
   if(id==='flocks')loadFlocks();
   if(id==='vaccines')loadVax();
@@ -992,7 +995,9 @@ async function popFlockSels(){
 // ════════════════════════════════════════════════════
 async function loadDash(){
   if(!CU)return;
-  document.getElementById('greeting').textContent=''+(()=>{const h=new Date().getHours();return h<12?'Good morning':h<17?'Good afternoon':'Good evening'})()+', '+(CP?.full_name?.split(' ')[0]||'Farmer')+' 👋';
+  const _hr=new Date().getHours();
+  const _gr=_hr<12?'Good morning':_hr<17?'Good afternoon':'Good evening';
+  document.getElementById('greeting').textContent=_gr+', '+(CP?.full_name?.split(' ')[0]||'Farmer')+' 👋';
   const[{data:fl},{data:vx},{data:fd},{data:nt}]=await Promise.all([
     sb.from('flocks').select('*').eq('user_id',CU.id).eq('active',true),
     sb.from('vaccines').select('*').eq('user_id',CU.id),
@@ -1102,6 +1107,7 @@ async function loadFlocks(){
       ${f.notes?`<div style="font-size:11px;color:var(--text3);margin-top:9px;">${f.notes}</div>`:''}
       <div style="display:flex;gap:7px;margin-top:11px;">
         <button class="btn bg" style="padding:4px 9px;font-size:11px;" onclick="editFlock('${f.id}')">✏️ Edit</button>
+        <button class="btn" style="padding:4px 9px;font-size:11px;background:#c0392b;color:#fff;border-radius:8px;" onclick="openMortalityModal('${f.id}','${f.name}',${f.birds})">💀 Mortality</button>
         <button class="btn bd" style="padding:4px 9px;font-size:11px;" onclick="archiveFlock('${f.id}','${f.name}')">🗄️ Archive</button>
       </div>
     </div>`).join('');
@@ -1473,10 +1479,349 @@ function sendBroadcast(){
 }
 
 // ════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════
+// MORTALITY
+// ════════════════════════════════════════════════════
+function openMortalityModal(flockId, flockName, currentBirds){
+  document.getElementById('mort-flock-id').value = flockId;
+  document.getElementById('mort-flock-name').value = flockName;
+  document.getElementById('mort-count').value = '';
+  document.getElementById('mort-date').valueAsDate = new Date();
+  document.getElementById('mort-cause').value = 'unknown';
+  document.getElementById('mort-notes').value = '';
+  document.getElementById('mort-health-update').style.display = 'none';
+  document.getElementById('mort-preview').textContent = `Current: ${currentBirds} birds`;
+  document.getElementById('mort-count')._max = currentBirds;
+  om('m-mortality');
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const mortCount = document.getElementById('mort-count');
+  if(mortCount) mortCount.addEventListener('input', () => {
+    const n = parseInt(mortCount.value) || 0;
+    const max = mortCount._max || 0;
+    const remaining = max - n;
+    const pct = max > 0 ? ((n/max)*100).toFixed(1) : 0;
+    document.getElementById('mort-preview').textContent = 
+      n > 0 ? `${n} birds died → ${remaining} remaining (${pct}% loss)` : `Current: ${max} birds`;
+    const healthDiv = document.getElementById('mort-health-update');
+    if(n > 0 && pct >= 2){
+      healthDiv.style.display = 'block';
+      const sel = document.getElementById('mort-health');
+      if(pct >= 15) sel.value = 'critical';
+      else if(pct >= 8) sel.value = 'sick';
+      else if(pct >= 3) sel.value = 'watch';
+      else sel.value = 'good';
+    } else {
+      healthDiv.style.display = 'none';
+    }
+  });
+});
+async function saveMortality(){
+  const flockId = document.getElementById('mort-flock-id').value;
+  const n = parseInt(document.getElementById('mort-count').value);
+  if(!n || n < 1){ toast('⚠️','Enter number of birds that died.'); return; }
+  const max = document.getElementById('mort-count')._max || 0;
+  if(n > max){ toast('⚠️',`Cannot exceed current flock size (${max}).`); return; }
+  const cause = document.getElementById('mort-cause').value;
+  const notes = document.getElementById('mort-notes').value.trim();
+  const date = document.getElementById('mort-date').value;
+  const healthDiv = document.getElementById('mort-health-update');
+  
+  // Insert mortality record as a note
+  const {error: noteErr} = await sb.from('notes').insert({
+    user_id: CU.id,
+    flock_id: flockId,
+    flock_name: document.getElementById('mort-flock-name').value,
+    category: 'mortality',
+    note_text: `💀 ${n} bird${n>1?'s':''} died. Cause: ${cause}.${notes?' '+notes:''}`,
+    created_at: new Date().toISOString()
+  });
+  if(noteErr){ toast('❌', noteErr.message); return; }
+
+  // Update flock bird count
+  const newCount = max - n;
+  const updatePay = { birds: newCount, updated_at: new Date().toISOString() };
+  if(healthDiv.style.display !== 'none'){
+    updatePay.health_status = document.getElementById('mort-health').value;
+  }
+  const {error: flockErr} = await sb.from('flocks').update(updatePay).eq('id', flockId);
+  if(flockErr){ toast('❌', flockErr.message); return; }
+
+  cm('m-mortality');
+  toast('✅', `Mortality recorded. Flock updated to ${newCount} birds.`);
+  logAudit('Logged mortality', `${n} birds, cause: ${cause}`);
+  loadFlocks(); loadDash();
+}
+
+// ════════════════════════════════════════════════════
+// PROFIT & LOSS CALCULATOR
+// ════════════════════════════════════════════════════
+function calcPNL(){
+  const type = document.getElementById('pnl-type').value;
+  document.getElementById('pnl-broiler-inputs').style.display = type === 'broiler' ? '' : 'none';
+  document.getElementById('pnl-layer-inputs').style.display = type === 'layer' ? '' : 'none';
+  
+  const fmt = n => Math.round(n).toLocaleString();
+  let revenue = 0, costs = 0;
+
+  if(type === 'broiler'){
+    const chicks = parseFloat(document.getElementById('pnl-chicks').value) || 0;
+    const chickCost = parseFloat(document.getElementById('pnl-chick-cost').value) || 0;
+    const bags = parseFloat(document.getElementById('pnl-bags').value) || 0;
+    const bagCost = parseFloat(document.getElementById('pnl-bag-cost').value) || 0;
+    const mortPct = parseFloat(document.getElementById('pnl-mort-pct').value) || 0;
+    const price = parseFloat(document.getElementById('pnl-price').value) || 0;
+    const other = parseFloat(document.getElementById('pnl-other').value) || 0;
+    const survivors = chicks * (1 - mortPct/100);
+    revenue = survivors * price;
+    costs = (chicks * chickCost) + (bags * bagCost) + other;
+    document.getElementById('pnl-breakeven').textContent = 
+      `Break-even price: MK ${fmt(costs/survivors)} per bird (${Math.round(survivors)} birds to sell)`;
+  } else {
+    const pullets = parseFloat(document.getElementById('pnl-pullets').value) || 0;
+    const pulletCost = parseFloat(document.getElementById('pnl-pullet-cost').value) || 0;
+    const bags = parseFloat(document.getElementById('pnl-layer-bags').value) || 0;
+    const bagCost = parseFloat(document.getElementById('pnl-layer-bag-cost').value) || 0;
+    const layRate = parseFloat(document.getElementById('pnl-lay-rate').value) || 0;
+    const eggPrice = parseFloat(document.getElementById('pnl-egg-price').value) || 0;
+    const months = parseFloat(document.getElementById('pnl-months').value) || 0;
+    const other = parseFloat(document.getElementById('pnl-layer-other').value) || 0;
+    const eggsPerDay = pullets * (layRate/100);
+    const traysPerMonth = (eggsPerDay * 30) / 30;
+    revenue = traysPerMonth * eggPrice * months;
+    costs = (pullets * pulletCost) + (bags * bagCost * months) + (other * months);
+    document.getElementById('pnl-breakeven').textContent = 
+      `~${Math.round(eggsPerDay)} eggs/day → ${Math.round(traysPerMonth)} trays/month`;
+  }
+  
+  const profit = revenue - costs;
+  const res = document.getElementById('pnl-result');
+  res.style.display = 'block';
+  document.getElementById('pnl-revenue').textContent = fmt(revenue);
+  document.getElementById('pnl-costs').textContent = fmt(costs);
+  const profitEl = document.getElementById('pnl-profit');
+  profitEl.textContent = (profit >= 0 ? '+' : '') + fmt(profit);
+  profitEl.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
+}
+
+// ════════════════════════════════════════════════════
+// ADMIN ACTIVITY
+// ════════════════════════════════════════════════════
+let activityData = [];
+async function loadAdminActivity(){
+  const {data: users} = await sb.from('profiles').select('*').order('created_at', {ascending: false});
+  const {data: audits} = await sb.from('audit_logs').select('user_id, created_at').order('created_at', {ascending: false});
+  
+  // Build last login map from audit logs
+  const lastLogin = {};
+  (audits||[]).forEach(a => {
+    if(!lastLogin[a.user_id]) lastLogin[a.user_id] = a.created_at;
+  });
+  
+  const now = Date.now();
+  activityData = (users||[]).filter(u => u.role !== 'admin').map(u => {
+    const ll = lastLogin[u.id];
+    const daysAgo = ll ? Math.floor((now - new Date(ll).getTime()) / 86400000) : null;
+    let status = 'never';
+    if(daysAgo !== null){
+      if(daysAgo <= 7) status = 'active7';
+      else if(daysAgo <= 14) status = 'inactive14';
+      else if(daysAgo <= 30) status = 'inactive30';
+      else status = 'inactive30';
+    }
+    return {...u, lastLogin: ll, daysAgo, status};
+  });
+
+  const active7 = activityData.filter(u => u.status === 'active7').length;
+  const inactive14 = activityData.filter(u => u.status === 'inactive14').length;
+  const inactive30 = activityData.filter(u => u.status === 'inactive30').length;
+  const never = activityData.filter(u => u.status === 'never').length;
+  
+  document.getElementById('a-active7').textContent = active7;
+  document.getElementById('a-inactive14').textContent = inactive14;
+  document.getElementById('a-inactive30').textContent = inactive30;
+  document.getElementById('a-never').textContent = never;
+  document.getElementById('a-activitysub').textContent = `${activityData.length} farmers tracked`;
+  
+  renderActivity();
+}
+async function renderActivity(){
+  const q = (document.getElementById('act-q')?.value || '').toLowerCase();
+  const filter = document.getElementById('act-filter')?.value || '';
+  let f = activityData.filter(u => {
+    if(q && !u.full_name?.toLowerCase().includes(q) && !u.email?.toLowerCase().includes(q)) return false;
+    if(filter && u.status !== filter) return false;
+    return true;
+  });
+  const tb = document.getElementById('activity-tbody');
+  if(!f.length){ tb.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3);">No farmers match</td></tr>`; return; }
+  
+  const statusBadge = s => {
+    const map = {active7:'<span style="color:#2ecc71;font-size:11px;">● Active</span>', inactive14:'<span style="color:#f39c12;font-size:11px;">● Inactive 14d</span>', inactive30:'<span style="color:#e74c3c;font-size:11px;">● Inactive 30d+</span>', never:'<span style="color:#7f8c8d;font-size:11px;">● Never</span>'};
+    return map[s] || '—';
+  };
+  
+  // Get flock counts
+  const flockCounts = {};
+  await Promise.all(f.map(async u => {
+    const {count} = await sb.from('flocks').select('*',{count:'exact',head:true}).eq('user_id',u.id).eq('active',true);
+    flockCounts[u.id] = count || 0;
+  }));
+
+  tb.innerHTML = f.map(u => `<tr>
+    <td><div style="font-weight:500;">${u.full_name||'—'}</div><div class="tdsub">${u.email}</div></td>
+    <td>${u.region||'—'}</td>
+    <td class="tmono">${u.lastLogin ? fmtD(u.lastLogin) : '—'}</td>
+    <td>${statusBadge(u.status)}</td>
+    <td>${flockCounts[u.id]||0}</td>
+    <td><button class="btn bg" style="padding:3px 8px;font-size:11px;" onclick="sendBroadcastTo('${u.id}','${u.full_name}')">📣 Message</button></td>
+  </tr>`).join('');
+}
+function sendBroadcastTo(uid, name){
+  toast('📣', `Broadcast to ${name} — use Broadcast page to message all farmers`);
+}
+
 // BOOT
 // ════════════════════════════════════════════════════
 init();
 </script>
+
+    <!-- MORTALITY MODAL -->
+    <div class="modal" id="m-mortality">
+      <div class="mbox">
+        <div class="mhdr"><span class="mtitle">💀 Log Mortality</span><button class="mclose" onclick="cm('m-mortality')">✕</button></div>
+        <div class="mbd">
+          <input type="hidden" id="mort-flock-id"/>
+          <div class="fg"><label class="fl">Flock</label><input class="fi" id="mort-flock-name" disabled/></div>
+          <div class="fgr fg2">
+            <div class="fg"><label class="fl">Birds Died</label><input class="fi" type="number" id="mort-count" min="1" placeholder="0"/></div>
+            <div class="fg"><label class="fl">Date</label><input class="fi" type="date" id="mort-date"/></div>
+          </div>
+          <div class="fg"><label class="fl">Cause of Death</label>
+            <select class="fi" id="mort-cause">
+              <option value="unknown">Unknown</option>
+              <option value="disease">Disease</option>
+              <option value="predator">Predator attack</option>
+              <option value="accident">Accident / injury</option>
+              <option value="starvation">Starvation / dehydration</option>
+              <option value="heat">Heat stress</option>
+              <option value="cold">Cold / exposure</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="fg"><label class="fl">Notes (optional)</label><textarea class="fi" id="mort-notes" rows="2" placeholder="Any observations…"></textarea></div>
+          <div id="mort-health-update" style="background:rgba(255,100,100,.08);border:1px solid rgba(255,100,100,.2);border-radius:10px;padding:10px;margin-top:6px;display:none;">
+            <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">⚠️ Auto-update flock health status:</div>
+            <select class="fi" id="mort-health" style="font-size:12px;">
+              <option value="good">Good</option>
+              <option value="watch">Watch</option>
+              <option value="sick">Sick</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+          <div id="mort-preview" style="font-size:12px;color:var(--text3);margin-top:8px;"></div>
+          <button class="btn bp" style="width:100%;margin-top:12px;" onclick="saveMortality()">Save Mortality Record</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- P&L CALCULATOR MODAL -->
+    <div class="mvw" id="mv-pnl">
+      <button class="mback" onclick="backMV()">← Back</button>
+      <div class="sec">💰 Profit & Loss Calculator</div>
+      <div class="secsub">Estimate your flock profitability</div>
+      <div class="card" style="max-width:480px;">
+        <div class="fg" style="margin-bottom:12px;">
+          <label class="fl">Flock Type</label>
+          <select class="fi" id="pnl-type" onchange="calcPNL()">
+            <option value="broiler">🐔 Broilers (Meat)</option>
+            <option value="layer">🥚 Layers (Eggs)</option>
+          </select>
+        </div>
+        <!-- BROILER INPUTS -->
+        <div id="pnl-broiler-inputs">
+          <div class="fgr fg2">
+            <div class="fg"><label class="fl">No. of Chicks</label><input class="fi" type="number" id="pnl-chicks" value="100" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Cost per Chick (MK)</label><input class="fi" type="number" id="pnl-chick-cost" value="1500" oninput="calcPNL()"/></div>
+          </div>
+          <div class="fgr fg2">
+            <div class="fg"><label class="fl">Bags of Feed</label><input class="fi" type="number" id="pnl-bags" value="15" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Cost per Bag (MK)</label><input class="fi" type="number" id="pnl-bag-cost" value="45000" oninput="calcPNL()"/></div>
+          </div>
+          <div class="fgr fg2">
+            <div class="fg"><label class="fl">Mortality (%)</label><input class="fi" type="number" id="pnl-mort-pct" value="5" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Sale Price per Bird (MK)</label><input class="fi" type="number" id="pnl-price" value="12000" oninput="calcPNL()"/></div>
+          </div>
+          <div class="fg"><label class="fl">Other Costs — vaccines, medication, etc. (MK)</label><input class="fi" type="number" id="pnl-other" value="5000" oninput="calcPNL()"/></div>
+        </div>
+        <!-- LAYER INPUTS -->
+        <div id="pnl-layer-inputs" style="display:none;">
+          <div class="fgr fg2">
+            <div class="fg"><label class="fl">No. of Pullets</label><input class="fi" type="number" id="pnl-pullets" value="50" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Cost per Pullet (MK)</label><input class="fi" type="number" id="pnl-pullet-cost" value="3500" oninput="calcPNL()"/></div>
+          </div>
+          <div class="fgr fg2">
+            <div class="fg"><label class="fl">Bags of Feed/Month</label><input class="fi" type="number" id="pnl-layer-bags" value="8" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Cost per Bag (MK)</label><input class="fi" type="number" id="pnl-layer-bag-cost" value="45000" oninput="calcPNL()"/></div>
+          </div>
+          <div class="fgr fg2">
+            <div class="fg"><label class="fl">Laying Rate (%)</label><input class="fi" type="number" id="pnl-lay-rate" value="75" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Egg Price per Tray (MK)</label><input class="fi" type="number" id="pnl-egg-price" value="3500" oninput="calcPNL()"/></div>
+          </div>
+          <div class="fgr fg2">
+            <div class="fg"><label class="fl">Months of Production</label><input class="fi" type="number" id="pnl-months" value="12" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Other Costs/Month (MK)</label><input class="fi" type="number" id="pnl-layer-other" value="5000" oninput="calcPNL()"/></div>
+          </div>
+        </div>
+        <!-- RESULTS -->
+        <div id="pnl-result" style="margin-top:18px;background:var(--bg3);border-radius:12px;padding:14px;display:none;">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text1);">📊 Summary</div>
+          <div class="fgr fg2" style="gap:8px;">
+            <div style="background:var(--bg2);border-radius:10px;padding:10px;text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--green);" id="pnl-revenue">—</div><div style="font-size:10px;color:var(--text3);">Revenue (MK)</div></div>
+            <div style="background:var(--bg2);border-radius:10px;padding:10px;text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--red);" id="pnl-costs">—</div><div style="font-size:10px;color:var(--text3);">Total Costs (MK)</div></div>
+          </div>
+          <div style="background:var(--bg2);border-radius:10px;padding:12px;text-align:center;margin-top:8px;">
+            <div style="font-size:22px;font-weight:700;" id="pnl-profit">—</div>
+            <div style="font-size:11px;color:var(--text3);">Net Profit / Loss (MK)</div>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:10px;" id="pnl-breakeven"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADMIN ACTIVITY PAGE -->
+    <div id="page-adm-activity" class="page">
+      <div class="abanner">⚙️ Admin Mode</div>
+      <div class="topbar">
+        <div><div class="tt">Login Activity</div><div class="ts" id="a-activitysub">Farmer engagement overview</div></div>
+      </div>
+      <div class="pad">
+        <div class="sgrid" style="margin-bottom:16px;">
+          <div class="scard green"><div class="sico">✅</div><div class="sval" id="a-active7">—</div><div class="slbl">Active (7 days)</div></div>
+          <div class="scard yellow"><div class="sico">⚠️</div><div class="sval" id="a-inactive14">—</div><div class="slbl">Inactive (14+ days)</div></div>
+          <div class="scard red"><div class="sico">😴</div><div class="sval" id="a-inactive30">—</div><div class="slbl">Inactive (30+ days)</div></div>
+          <div class="scard"><div class="sico">👤</div><div class="sval" id="a-never">—</div><div class="slbl">Never logged in</div></div>
+        </div>
+        <div class="card">
+          <div class="fbar" style="margin-bottom:12px;">
+            <div class="swrap"><span class="sico2">🔍</span><input class="fi" id="act-q" placeholder="Search farmer…" oninput="renderActivity()"/></div>
+            <select class="fsel" id="act-filter" onchange="renderActivity()">
+              <option value="">All farmers</option>
+              <option value="active7">Active (7 days)</option>
+              <option value="inactive14">Inactive (14+ days)</option>
+              <option value="inactive30">Inactive (30+ days)</option>
+              <option value="never">Never logged in</option>
+            </select>
+          </div>
+          <div class="twrap"><table>
+            <thead><tr><th>Farmer</th><th>Region</th><th>Last Login</th><th>Status</th><th>Flocks</th><th>Actions</th></tr></thead>
+            <tbody id="activity-tbody"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
