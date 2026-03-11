@@ -262,6 +262,34 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
   .sgrid{grid-template-columns:1fr 1fr}.g2,.g64,.fg2,.fg3,.fgr.fg2,.fgr.fg3{grid-template-columns:1fr}
   .mgrid{grid-template-columns:1fr}.pad{padding:16px 14px}
 }
+
+/* ── Responsive tables ── */
+@media(max-width:600px){
+  .twrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .twrap table{min-width:480px;}
+  .hide-mobile{display:none!important;}
+  .pad{padding:10px 8px!important;}
+  .sgrid{grid-template-columns:1fr 1fr!important;}
+  .abanner{font-size:11px;padding:5px 10px;}
+  .topbar{flex-wrap:wrap;gap:6px;}
+  .tact{flex-wrap:wrap;gap:4px;}
+  .fbar{flex-direction:column;gap:6px;}
+  .fbar .swrap{width:100%;}
+  .fbar .fsel{width:100%;}
+  th,td{font-size:11px;padding:6px 7px!important;}
+  .sval{font-size:22px!important;}
+  .g64{grid-template-columns:1fr!important;}
+}
+@media(max-width:400px){
+  .sgrid{grid-template-columns:1fr!important;}
+}
+
+
+/* ── Offline banner ── */
+#offline-banner{display:none;position:fixed;top:0;left:0;right:0;z-index:9998;background:#e74c3c;color:#fff;text-align:center;padding:6px;font-size:12px;font-weight:600;}
+body.offline #offline-banner{display:block;}
+body.offline .main{padding-top:32px;}
+
 </style>
 <meta name="theme-color" content="#0c0f0a"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -272,7 +300,8 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
 <body>
 
 <!-- LOADING -->
-<div id="loading-screen">
+<div id="offline-banner">📡 No internet connection — showing cached data</div>
+  <div id="loading-screen">
   <img src="data:image/png;base64,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" alt="Nkhuku"/>
   <div class="loading-text">Loading Nkhuku…</div>
 </div>
@@ -316,7 +345,31 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
         <div class="fg"><label class="fl">Region *</label>
           <select class="fs" id="rg-region"><option value="">Select region…</option><option>Central</option><option>Southern</option><option>Northern</option><option>Eastern</option><option>Western</option></select>
         </div>
-        <div class="fg"><label class="fl">Flock Type</label>
+        <div class="fg"><label class="fl">Currency <span style="font-size:10px;color:var(--text3);">(auto-detected, change if needed)</span></label>
+        <select class="fi" id="rg-currency">
+          <option value="">— Auto-detect —</option>
+          <option value="MK">MK — Malawian Kwacha</option>
+          <option value="ZMW">ZMW — Zambian Kwacha</option>
+          <option value="KSh">KSh — Kenyan Shilling</option>
+          <option value="TSh">TSh — Tanzanian Shilling</option>
+          <option value="USh">USh — Ugandan Shilling</option>
+          <option value="RF">RF — Rwandan Franc</option>
+          <option value="GH₵">GH₵ — Ghanaian Cedi</option>
+          <option value="₦">₦ — Nigerian Naira</option>
+          <option value="R">R — South African Rand</option>
+          <option value="Br">Br — Ethiopian Birr</option>
+          <option value="CFA">CFA — West African Franc</option>
+          <option value="MT">MT — Mozambican Metical</option>
+          <option value="P">P — Botswana Pula</option>
+          <option value="N$">N$ — Namibian Dollar</option>
+          <option value="$">$ — US Dollar</option>
+          <option value="£">£ — British Pound</option>
+          <option value="€">€ — Euro</option>
+          <option value="₹">₹ — Indian Rupee</option>
+          <option value="A$">A$ — Australian Dollar</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Flock Type</label>
           <select class="fs" id="rg-type"><option value="">Select type…</option><option>Broiler</option><option>Layer</option><option>Indigenous</option><option>Mixed</option></select>
         </div>
       </div>
@@ -498,6 +551,7 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
         <div class="avatar" id="sb-av">?</div>
         <div><div class="uname" id="sb-name">—</div><div class="urole" id="sb-role">—</div></div>
       </div>
+      <button class="logout-btn" style="background:var(--bg3);color:var(--text2);margin-bottom:6px;" onclick="openProfile()">⚙️ Settings</button>
       <button class="logout-btn" onclick="doLogout()">→ Sign out</button>
     </div>
   </aside>
@@ -546,7 +600,7 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
       <div class="pad">
         <div class="g3 mb" id="vax-cards"></div>
         <div class="twrap"><table>
-          <thead><tr><th>Vaccine</th><th>Flock</th><th>Given</th><th>Due</th><th>Method</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Vaccine</th><th>Flock</th><th class="hide-mobile">Given</th><th>Due</th><th class="hide-mobile">Method</th><th>Status</th><th></th></tr></thead>
           <tbody id="vax-tbody"></tbody>
         </table></div>
       </div>
@@ -564,7 +618,7 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
       <div class="pad">
         <div class="g3 mb" id="feed-cards"></div>
         <div class="twrap"><table>
-          <thead><tr><th>Date</th><th>Flock</th><th>Feed (kg)</th><th>Water (L)</th><th>Deaths</th><th>Avg Wt</th><th>Notes</th><th></th></tr></thead>
+          <thead><tr><th>Date</th><th>Flock</th><th>Feed (kg)</th><th class="hide-mobile">Water (L)</th><th>Deaths</th><th class="hide-mobile">Avg Wt</th><th class="hide-mobile">Notes</th><th></th></tr></thead>
           <tbody id="feed-tbody"></tbody>
         </table></div>
       </div>
@@ -724,7 +778,7 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
           <button class="btn bg" onclick="clearUFilters()">Clear</button>
         </div>
         <div class="twrap"><table>
-          <thead><tr><th>User</th><th>Region</th><th>Role</th><th>Joined</th><th>Flocks</th><th>Actions</th></tr></thead>
+          <thead><tr><th>User</th><th>Region</th><th>Role</th><th class="hide-mobile">Joined</th><th>Flocks</th><th>Actions</th></tr></thead>
           <tbody id="a-users-tbody"></tbody>
         </table></div>
       </div>
@@ -763,7 +817,7 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
       <div class="topbar"><div><div class="tt">Audit Logs</div><div class="ts">All platform actions</div></div></div>
       <div class="pad">
         <div class="twrap"><table>
-          <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Detail</th></tr></thead>
+          <thead><tr><th>Time</th><th class="hide-mobile">User</th><th>Action</th><th class="hide-mobile">Detail</th></tr></thead>
           <tbody id="audit-tbody"></tbody>
         </table></div>
       </div>
@@ -842,6 +896,7 @@ async function doRegister(){
   const phone=document.getElementById('rg-phone').value.trim();
   const region=document.getElementById('rg-region').value;
   const ftype=document.getElementById('rg-type').value;
+  const currency=document.getElementById('rg-currency').value||_localeCurrency||'MK';
   if(!name||!email||!pw){showErr('Name, email and password are required.');return;}
   if(!region){showErr('Please select your region.');return;}
   if(pw.length<6){showErr('Password must be at least 6 characters.');return;}
@@ -850,7 +905,7 @@ async function doRegister(){
   setBtn('reg-btn',false,'','Create Account');
   if(error){showErr(error.message);return;}
   if(data.user){
-    await sb.from('profiles').upsert({id:data.user.id,full_name:name,email,phone,region,flock_type:ftype,role:'farmer',created_at:new Date().toISOString()});
+    await sb.from('profiles').upsert({id:data.user.id,full_name:name,email,phone,region,flock_type:ftype,currency,role:'farmer',created_at:new Date().toISOString()});
     if(!data.session){showOk('✅ Account created! Check your email to confirm, then sign in.');switchTab('login');}
     else await loginOk(data.user);
   }
@@ -1516,7 +1571,7 @@ const _localeCurrency = (() => {
 })();
 
 function calcPNL(){
-  const cur = _localeCurrency;
+  const cur = CP?.currency || _localeCurrency;
   const type = document.getElementById('pnl-type').value;
   document.getElementById('pnl-broiler-inputs').style.display = type === 'broiler' ? '' : 'none';
   document.getElementById('pnl-layer-inputs').style.display = type === 'layer' ? '' : 'none';
@@ -1655,6 +1710,123 @@ function sendBroadcast(){
   toast('📣','Broadcast sent via '+bCh+'!');
 }
 
+
+function openProfile(){
+  document.getElementById('prof-name').value = CP?.full_name || '';
+  document.getElementById('prof-phone').value = CP?.phone || '';
+  const cur = CP?.currency || _localeCurrency || 'MK';
+  const sel = document.getElementById('prof-currency');
+  let found = false;
+  for(let o of sel.options){ if(o.value===cur){o.selected=true;found=true;break;} }
+  if(!found) sel.options[0].selected = true;
+  // Update notification button label
+  const nb = document.getElementById('notif-toggle-btn');
+  if(nb){
+    if(!('Notification' in window)){ nb.textContent='🔕 Not supported'; nb.disabled=true; }
+    else if(Notification.permission==='granted'){ nb.textContent='🔔 Notifications ON ✓'; nb.style.background='rgba(46,204,113,.15)'; nb.style.color='var(--green)'; }
+    else if(Notification.permission==='denied'){ nb.textContent='🚫 Blocked in settings'; nb.style.background=''; }
+    else { nb.textContent='🔔 Enable Vaccine Reminders'; nb.style.background=''; nb.style.color=''; }
+  }
+  om('m-profile');
+}
+
+async function toggleNotifications(){
+  const granted = await requestNotifPermission();
+  const nb = document.getElementById('notif-toggle-btn');
+  if(nb && granted){
+    nb.textContent='🔔 Notifications ON ✓';
+    nb.style.background='rgba(46,204,113,.15)';
+    nb.style.color='var(--green)';
+    scheduleVaccineCheck();
+  }
+}
+async function saveProfile(){
+  const name = document.getElementById('prof-name').value.trim();
+  const phone = document.getElementById('prof-phone').value.trim();
+  const currency = document.getElementById('prof-currency').value;
+  if(!name){ toast('⚠️','Name is required.'); return; }
+  const {error} = await sb.from('profiles').update({
+    full_name: name, phone, currency, updated_at: new Date().toISOString()
+  }).eq('id', CU.id);
+  if(error){ toast('❌', error.message); return; }
+  CP.full_name = name; CP.phone = phone; CP.currency = currency;
+  document.getElementById('sb-name').textContent = name.split(' ')[0];
+  cm('m-profile');
+  toast('✅', 'Profile updated! Currency set to ' + currency);
+  logAudit('Updated profile', 'Currency: ' + currency);
+}
+
+
+// ── Offline detection ──
+window.addEventListener('online',  () => document.body.classList.remove('offline'));
+window.addEventListener('offline', () => document.body.classList.add('offline'));
+if(!navigator.onLine) document.body.classList.add('offline');
+
+
+// ════════════════════════════════════════════════════
+// PUSH NOTIFICATIONS
+// ════════════════════════════════════════════════════
+let _notifEnabled = false;
+
+async function requestNotifPermission(){
+  if(!('Notification' in window)){ toast('ℹ️','Notifications not supported on this device.'); return false; }
+  if(Notification.permission === 'granted'){ _notifEnabled = true; return true; }
+  if(Notification.permission === 'denied'){ toast('⚠️','Notifications blocked. Enable in browser settings.'); return false; }
+  const perm = await Notification.requestPermission();
+  _notifEnabled = perm === 'granted';
+  if(_notifEnabled) toast('🔔','Notifications enabled! You will get vaccine reminders.');
+  else toast('⚠️','Notifications not enabled.');
+  return _notifEnabled;
+}
+
+function sendLocalNotif(title, body, tag='nkhuku'){
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  if(_swReg){
+    _swReg.showNotification(title, {
+      body, icon: '/icon-192.png', badge: '/icon-192.png',
+      tag, requireInteraction: false
+    });
+  } else {
+    new Notification(title, { body, icon: '/icon-192.png' });
+  }
+}
+
+async function checkVaccineNotifs(){
+  if(!CU) return;
+  if(Notification.permission !== 'granted') return;
+  const {data} = await sb.from('vaccines').select('*').eq('user_id', CU.id);
+  if(!data) return;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const soon = new Date(today); soon.setDate(soon.getDate() + 3);
+
+  const overdue = data.filter(v => v.status === 'overdue');
+  const dueSoon = data.filter(v => {
+    if(!v.due_date) return false;
+    const d = new Date(v.due_date); d.setHours(0,0,0,0);
+    return d <= soon && d >= today;
+  });
+
+  if(overdue.length > 0){
+    sendLocalNotif(
+      '🔴 Overdue Vaccines — Nkhuku',
+      `${overdue.length} vaccine${overdue.length>1?'s are':' is'} overdue: ${overdue.map(v=>v.vaccine_name).join(', ')}`,
+      'vax-overdue'
+    );
+  } else if(dueSoon.length > 0){
+    sendLocalNotif(
+      '🟡 Vaccines Due Soon — Nkhuku',
+      `${dueSoon.length} vaccine${dueSoon.length>1?'s':''} due in the next 3 days: ${dueSoon.map(v=>v.vaccine_name).join(', ')}`,
+      'vax-soon'
+    );
+  }
+}
+
+// Check vaccines on login and then every 6 hours
+function scheduleVaccineCheck(){
+  checkVaccineNotifs();
+  setInterval(checkVaccineNotifs, 6 * 60 * 60 * 1000);
+}
+
 // BOOT
 // ════════════════════════════════════════════════════
 init();
@@ -1750,7 +1922,7 @@ init();
             </select>
           </div>
           <div class="twrap"><table>
-            <thead><tr><th>Farmer</th><th>Region</th><th>Last Login</th><th>Status</th><th>Flocks</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Farmer</th><th class="hide-mobile">Region</th><th>Last Login</th><th>Status</th><th class="hide-mobile">Flocks</th><th>Actions</th></tr></thead>
             <tbody id="activity-tbody"></tbody>
           </table></div>
         </div>
@@ -1758,11 +1930,60 @@ init();
     </div>
 
 <script>
+let _swReg = null;
 if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  window.addEventListener('load', async () => {
+    try {
+      _swReg = await navigator.serviceWorker.register('/sw.js');
+      console.log('SW registered');
+    } catch(e) { console.log('SW failed:', e); }
   });
 }
 </script>
+
+    <!-- PROFILE SETTINGS MODAL -->
+    <div class="mover" id="m-profile">
+      <div class="modal">
+        <button class="mclose" onclick="cm('m-profile')">✕</button>
+        <div class="mtitle">⚙️ My Profile</div>
+        <div class="msub">Update your details</div>
+        <div class="fg"><label class="fl">Full Name</label><input class="fi" id="prof-name" placeholder="Your name"/></div>
+        <div class="fg"><label class="fl">Phone</label><input class="fi" id="prof-phone" placeholder="+265…" type="tel"/></div>
+        <div class="fg"><label class="fl">Currency</label>
+          <select class="fi" id="prof-currency">
+            <option value="MK">MK — Malawian Kwacha</option>
+            <option value="ZMW">ZMW — Zambian Kwacha</option>
+            <option value="KSh">KSh — Kenyan Shilling</option>
+            <option value="TSh">TSh — Tanzanian Shilling</option>
+            <option value="USh">USh — Ugandan Shilling</option>
+            <option value="RF">RF — Rwandan Franc</option>
+            <option value="GH₵">GH₵ — Ghanaian Cedi</option>
+            <option value="₦">₦ — Nigerian Naira</option>
+            <option value="R">R — South African Rand</option>
+            <option value="Br">Br — Ethiopian Birr</option>
+            <option value="CFA">CFA — West African Franc</option>
+            <option value="MT">MT — Mozambican Metical</option>
+            <option value="P">P — Botswana Pula</option>
+            <option value="N$">N$ — Namibian Dollar</option>
+            <option value="$">$ — US Dollar</option>
+            <option value="£">£ — British Pound</option>
+            <option value="€">€ — Euro</option>
+            <option value="₹">₹ — Indian Rupee</option>
+            <option value="A$">A$ — Australian Dollar</option>
+          </select>
+        </div>
+        <div class="fg" style="margin-top:4px;">
+          <label class="fl">Vaccine Reminders</label>
+          <button class="btn" id="notif-toggle-btn" style="width:100%;background:var(--bg3);color:var(--text2);border:1px solid var(--border2);border-radius:10px;padding:9px;" onclick="toggleNotifications()">
+            🔔 Enable Notifications
+          </button>
+        </div>
+        <div class="mfoot">
+          <button class="btn bg" onclick="cm('m-profile')">Cancel</button>
+          <button class="btn bp" onclick="saveProfile()">Save Changes</button>
+        </div>
+      </div>
+    </div>
+
 </body>
 </html>

@@ -1,26 +1,18 @@
-// Nkhuku Service Worker — Offline Support
-const CACHE = 'nkhuku-v1';
-const OFFLINE_URL = 'offline.html';
+// Nkhuku Service Worker v2 — Offline + Push Notifications
+const CACHE = 'nkhuku-v2';
+const OFFLINE_URL = '/offline.html';
 
-const PRECACHE = [
-  '/',
-  '/index.html',
-  '/offline.html',
-  'https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap',
-  'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
-];
-
-// Install — cache essentials
+// ── Install ──────────────────────────────────────────
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE).then(cache => {
-      return cache.addAll(['/index.html', '/offline.html']).catch(() => {});
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE).then(cache =>
+      cache.addAll(['/index.html', '/offline.html', '/icon-192.png', '/icon-512.png'])
+        .catch(() => cache.add('/offline.html').catch(() => {}))
+    ).then(() => self.skipWaiting())
   );
 });
 
-// Activate — clean old caches
+// ── Activate ─────────────────────────────────────────
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -29,31 +21,83 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch — network first, fall back to cache, then offline page
+// ── Fetch — app shell cached, Supabase always network ─
 self.addEventListener('fetch', event => {
-  // Skip non-GET and Supabase API calls (always need network)
   if (event.request.method !== 'GET') return;
-  if (event.request.url.includes('supabase.co')) return;
 
+  const url = new URL(event.request.url);
+
+  // Always go network for Supabase API
+  if (url.hostname.includes('supabase.co')) return;
+
+  // For navigation (page loads) — cache first, network fallback
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      caches.match('/index.html').then(cached => {
+        if (cached) {
+          // Refresh cache in background
+          fetch(event.request).then(r => {
+            if (r && r.status === 200) {
+              caches.open(CACHE).then(c => c.put('/index.html', r));
+            }
+          }).catch(() => {});
+          return cached;
+        }
+        return fetch(event.request).catch(() => caches.match(OFFLINE_URL));
+      })
+    );
+    return;
+  }
+
+  // For assets — network first, cache fallback
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Cache successful responses
         if (response && response.status === 200 && response.type === 'basic') {
-          const clone = response.clone();
-          caches.open(CACHE).then(cache => cache.put(event.request, clone));
+          caches.open(CACHE).then(c => c.put(event.request, response.clone()));
         }
         return response;
       })
-      .catch(() => {
-        // Network failed — try cache
-        return caches.match(event.request).then(cached => {
-          if (cached) return cached;
-          // For navigation requests, show offline page
-          if (event.request.mode === 'navigate') {
-            return caches.match('/offline.html');
-          }
-        });
-      })
+      .catch(() => caches.match(event.request))
   );
+});
+
+// ── Push Notifications ───────────────────────────────
+self.addEventListener('push', event => {
+  let data = { title: 'Nkhuku', body: 'You have a vaccine reminder.' };
+  try { data = event.data.json(); } catch(e) {}
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Nkhuku', {
+      body: data.body || 'Check your vaccine schedule.',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: data.tag || 'nkhuku-reminder',
+      requireInteraction: false,
+      data: { url: data.url || '/' }
+    })
+  );
+});
+
+// ── Notification click — open app ────────────────────
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) return clients.openWindow('/');
+    })
+  );
+});
+
+// ── Background sync for vaccine checks ───────────────
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'CHECK_VACCINES') {
+    // Triggered by the app — handled in main thread
+    event.ports[0]?.postMessage({ status: 'ok' });
+  }
 });
