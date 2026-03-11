@@ -1485,123 +1485,33 @@ function setCh(btn){
   bCh=btn.textContent.toLowerCase().includes('push')?'push':btn.textContent.toLowerCase().includes('email')?'email':'sms';
   document.querySelectorAll('.chtab').forEach(b=>b.className='chtab '+(b===btn?'on':'off'));
 }
-function sendBroadcast(){
-  const msg=document.getElementById('bc-msg').value.trim();
-  if(!msg){toast('⚠️','Please enter a message.');return;}
-  const seg=document.getElementById('bc-seg');
-  cm('m-broadcast');document.getElementById('bc-msg').value='';
-  logAudit('Broadcast via '+bCh,seg.options[seg.selectedIndex].text);
-  toast('📣','Broadcast sent via '+bCh+'!');
-}
 
-// ════════════════════════════════════════════════════
-
-
-  
-  // Build flock selector if not already there
-  let sel = document.getElementById('mort-flock-sel');
-  if(!sel){
-    // Replace the disabled input with a select
-    const nameInput = document.getElementById('mort-flock-name');
-    sel = document.createElement('select');
-    sel.className = 'fi';
-    sel.id = 'mort-flock-sel';
-    sel.onchange = function(){
-      const opt = sel.options[sel.selectedIndex];
-      document.getElementById('mort-flock-id').value = opt.value;
-      document.getElementById('mort-count')._max = parseInt(opt.dataset.birds);
-      document.getElementById('mort-preview').textContent = `Current: ${opt.dataset.birds} birds`;
-      document.getElementById('mort-health-update').style.display = 'none';
-    };
-    nameInput.parentNode.replaceChild(sel, nameInput);
-  }
-  sel.innerHTML = data.map(f => `<option value="${f.id}" data-birds="${f.birds}">${f.name} (${f.birds} birds)</option>`).join('');
-  
-  // Set first flock as default
-  document.getElementById('mort-flock-id').value = data[0].id;
-  document.getElementById('mort-count')._max = data[0].birds;
-  document.getElementById('mort-count').value = '';
-  document.getElementById('mort-date').valueAsDate = new Date();
-  document.getElementById('mort-cause').value = 'unknown';
-  document.getElementById('mort-notes').value = '';
-  document.getElementById('mort-health-update').style.display = 'none';
-  document.getElementById('mort-preview').textContent = `Current: ${data[0].birds} birds`;
-  om('m-mortality');
-}
-
-// ════════════════════════════════════════════════════
-// MORTALITY
-// ════════════════════════════════════════════════════
-});
-  const max = document.getElementById('mort-count')._max || 0;
-  if(n > max){ toast('⚠️',`Cannot exceed current flock size (${max}).`); return; }
-  const cause = document.getElementById('mort-cause').value;
-  const notes = document.getElementById('mort-notes').value.trim();
-  const date = document.getElementById('mort-date').value;
-  const healthDiv = document.getElementById('mort-health-update');
-  
-  // Insert mortality record as a note
-  const {error: noteErr} = await sb.from('notes').insert({
-    user_id: CU.id,
-    flock_id: flockId,
-    flock_name: document.getElementById('mort-flock-name').value,
-    category: 'mortality',
-    note_text: `💀 ${n} bird${n>1?'s':''} died. Cause: ${cause}.${notes?' '+notes:''}`,
-    created_at: new Date().toISOString()
-  });
-  if(noteErr){ toast('❌', noteErr.message); return; }
-
-  // Update flock bird count
-  const newCount = max - n;
-  const updatePay = { birds: newCount, updated_at: new Date().toISOString() };
-  if(healthDiv.style.display !== 'none'){
-    updatePay.health_status = document.getElementById('mort-health').value;
-  }
-  const {error: flockErr} = await sb.from('flocks').update(updatePay).eq('id', flockId);
-  if(flockErr){ toast('❌', flockErr.message); return; }
-
-  cm('m-mortality');
-  toast('✅', `Mortality recorded. Flock updated to ${newCount} birds.`);
-  logAudit('Logged mortality', `${n} birds, cause: ${cause}`);
-  loadFlocks(); loadDash();
-}
 
 // ════════════════════════════════════════════════════
 // PROFIT & LOSS CALCULATOR
 // ════════════════════════════════════════════════════
-// ── Currency detection (runs once on load) ──────────────
-const _currencyMap = {
-  'en-MW':'MK','en-ZM':'ZMW','en-ZW':'ZWL','en-KE':'KSh','en-UG':'USh',
-  'en-TZ':'TSh','en-GH':'GH₵','en-NG':'₦','en-ZA':'R','en-ET':'Br',
-  'en-RW':'RF','en-SN':'CFA','en-CM':'CFA','en-CI':'CFA','en-ML':'CFA',
-  'fr-SN':'CFA','fr-CM':'CFA','fr-CI':'CFA','fr-ML':'CFA','fr-BF':'CFA',
-  'sw-KE':'KSh','sw-TZ':'TSh','am-ET':'Br','rw-RW':'RF',
-  'en-US':'$','en-GB':'£','en-AU':'A$','en-CA':'CA$','de-DE':'€','fr-FR':'€',
-};
+// ── Currency detection ──────────────────────────────
 const _localeCurrency = (() => {
   try {
     const locale = navigator.language || navigator.languages?.[0] || 'en-MW';
-    if(_currencyMap[locale]) return _currencyMap[locale];
-    // Try Intl API for full coverage
-    const intlCur = new Intl.NumberFormat(locale, {style:'currency',currency:
-      new Intl.NumberFormat(locale,{style:'currency',currency:'USD'})
-        .resolvedOptions().currency || 'USD'
-    }).resolvedOptions().currency;
-    // Map currency code to symbol
-    const symMap = {
-      MWK:'MK',ZMW:'ZMW',ZWL:'ZWL',KES:'KSh',UGX:'USh',TZS:'TSh',
-      GHS:'GH₵',NGN:'₦',ZAR:'R',ETB:'Br',RWF:'RF',XOF:'CFA',XAF:'CFA',
-      USD:'$',GBP:'£',EUR:'€',AUD:'A$',CAD:'CA$',INR:'₹',CNY:'¥',JPY:'¥',
-      BRL:'R$',MXN:'MX$',PKR:'₨',BDT:'৳',PHP:'₱',IDR:'Rp',MYR:'RM',
-      THB:'฿',VND:'₫',KRW:'₩',SGD:'S$',HKD:'HK$',NZD:'NZ$',CHF:'CHF',
-      SEK:'kr',NOK:'kr',DKK:'kr',PLN:'zł',CZK:'Kč',HUF:'Ft',TRY:'₺',
-      AED:'AED',SAR:'SR',QAR:'QR',KWD:'KD',BHD:'BD',OMR:'OMR',JOD:'JD',
-      EGP:'E£',MAD:'MAD',DZD:'DA',TND:'DT',LYD:'LD',SDG:'SDG',
-      KES:'KSh',TZS:'TSh',UGX:'USh',RWF:'RF',BIF:'FBu',SOS:'Sh',
-      MZN:'MT',BWP:'P',LSL:'L',SZL:'L',NAD:'N$',ZMW:'ZMW',AOA:'Kz',
-      GNF:'FG',SLL:'Le',LRD:'L$',GMD:'D',CVE:'$',STN:'Db',
+    const map = {
+      'en-MW':'MK','en-ZM':'ZMW','en-ZW':'ZWL','en-KE':'KSh','en-UG':'USh',
+      'en-TZ':'TSh','en-GH':'GH₵','en-NG':'₦','en-ZA':'R','en-ET':'Br',
+      'en-RW':'RF','en-SN':'CFA','en-CM':'CFA','en-CI':'CFA','en-ML':'CFA',
+      'fr-SN':'CFA','fr-CM':'CFA','fr-CI':'CFA','fr-ML':'CFA','fr-BF':'CFA',
+      'sw-KE':'KSh','sw-TZ':'TSh','am-ET':'Br','rw-RW':'RF',
+      'en-US':'$','en-GB':'£','en-AU':'A$','en-CA':'CA$',
+      'de-DE':'€','fr-FR':'€','es-ES':'€','it-IT':'€',
+      'en-IN':'₹','zh-CN':'¥','zh-TW':'NT$','ja-JP':'¥','ko-KR':'₩',
+      'pt-BR':'R$','es-MX':'MX$','ru-RU':'₽','ar-SA':'SR','ar-AE':'AED',
+      'en-PK':'₨','bn-BD':'৳','en-PH':'₱','id-ID':'Rp','ms-MY':'RM',
+      'th-TH':'฿','vi-VN':'₫','en-SG':'S$','en-HK':'HK$','en-NZ':'NZ$',
+      'de-CH':'CHF','fr-CH':'CHF','sv-SE':'kr','nb-NO':'kr','da-DK':'kr',
+      'pl-PL':'zł','cs-CZ':'Kč','hu-HU':'Ft','tr-TR':'₺',
+      'ar-EG':'E£','ar-MA':'MAD','ar-DZ':'DA','ar-TN':'DT',
+      'en-MZ':'MT','en-BW':'P','en-NA':'N$','en-AO':'Kz','en-GH':'GH₵',
     };
-    return symMap[intlCur] || intlCur || 'MK';
+    return map[locale] || map[locale.split('-')[0]+'-'+locale.split('-')[1]] || 'MK';
   } catch(e){ return 'MK'; }
 })();
 
@@ -1733,6 +1643,16 @@ async function renderActivity(){
 }
 function sendBroadcastTo(uid, name){
   toast('📣', `Broadcast to ${name} — use Broadcast page to message all farmers`);
+}
+
+
+function sendBroadcast(){
+  const msg=document.getElementById('bc-msg').value.trim();
+  if(!msg){toast('⚠️','Please enter a message.');return;}
+  const bCh=document.getElementById('bc-channel').options[document.getElementById('bc-channel').selectedIndex].text;
+  logAudit('Broadcast sent',msg.substring(0,60));
+  cm('m-broadcast');
+  toast('📣','Broadcast sent via '+bCh+'!');
 }
 
 // BOOT
