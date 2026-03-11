@@ -511,6 +511,7 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
         <div class="tact">
           <button class="btn bg" onclick="openFlockModal()">+ Flock</button>
           <button class="btn bp" onclick="openFeedModal()">+ Log Today</button>
+          <button class="btn" style="background:#c0392b;color:#fff;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600;border:none;cursor:pointer;" onclick="openDashMortality()">💀 Mortality</button>
         </div>
       </div>
       <div class="pad">
@@ -559,6 +560,7 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
         <div class="tact">
           <button class="btn bg" onclick="sp('calcs')">Calculators</button>
           <button class="btn bp" onclick="openFeedModal()">+ Log Today</button>
+          <button class="btn" style="background:#c0392b;color:#fff;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600;border:none;cursor:pointer;" onclick="openDashMortality()">💀 Mortality</button>
         </div>
       </div>
       <div class="pad">
@@ -1107,7 +1109,6 @@ async function loadFlocks(){
       ${f.notes?`<div style="font-size:11px;color:var(--text3);margin-top:9px;">${f.notes}</div>`:''}
       <div style="display:flex;gap:7px;margin-top:11px;">
         <button class="btn bg" style="padding:4px 9px;font-size:11px;" onclick="editFlock('${f.id}')">✏️ Edit</button>
-        <button class="btn" style="padding:4px 9px;font-size:11px;background:#c0392b;color:#fff;border-radius:8px;" onclick="openMortalityModal('${f.id}','${f.name}',${f.birds})">💀 Mortality</button>
         <button class="btn bd" style="padding:4px 9px;font-size:11px;" onclick="archiveFlock('${f.id}','${f.name}')">🗄️ Archive</button>
       </div>
     </div>`).join('');
@@ -1480,6 +1481,43 @@ function sendBroadcast(){
 
 // ════════════════════════════════════════════════════
 
+
+async function openDashMortality(){
+  // Populate flock select in mortality modal
+  const {data} = await sb.from('flocks').select('id,name,birds').eq('user_id',CU.id).eq('active',true);
+  if(!data||!data.length){ toast('⚠️','No active flocks found.'); return; }
+  
+  // Build flock selector if not already there
+  let sel = document.getElementById('mort-flock-sel');
+  if(!sel){
+    // Replace the disabled input with a select
+    const nameInput = document.getElementById('mort-flock-name');
+    sel = document.createElement('select');
+    sel.className = 'fi';
+    sel.id = 'mort-flock-sel';
+    sel.onchange = function(){
+      const opt = sel.options[sel.selectedIndex];
+      document.getElementById('mort-flock-id').value = opt.value;
+      document.getElementById('mort-count')._max = parseInt(opt.dataset.birds);
+      document.getElementById('mort-preview').textContent = `Current: ${opt.dataset.birds} birds`;
+      document.getElementById('mort-health-update').style.display = 'none';
+    };
+    nameInput.parentNode.replaceChild(sel, nameInput);
+  }
+  sel.innerHTML = data.map(f => `<option value="${f.id}" data-birds="${f.birds}">${f.name} (${f.birds} birds)</option>`).join('');
+  
+  // Set first flock as default
+  document.getElementById('mort-flock-id').value = data[0].id;
+  document.getElementById('mort-count')._max = data[0].birds;
+  document.getElementById('mort-count').value = '';
+  document.getElementById('mort-date').valueAsDate = new Date();
+  document.getElementById('mort-cause').value = 'unknown';
+  document.getElementById('mort-notes').value = '';
+  document.getElementById('mort-health-update').style.display = 'none';
+  document.getElementById('mort-preview').textContent = `Current: ${data[0].birds} birds`;
+  om('m-mortality');
+}
+
 // ════════════════════════════════════════════════════
 // MORTALITY
 // ════════════════════════════════════════════════════
@@ -1557,12 +1595,52 @@ async function saveMortality(){
 // ════════════════════════════════════════════════════
 // PROFIT & LOSS CALCULATOR
 // ════════════════════════════════════════════════════
+// ── Currency detection (runs once on load) ──────────────
+const _currencyMap = {
+  'en-MW':'MK','en-ZM':'ZMW','en-ZW':'ZWL','en-KE':'KSh','en-UG':'USh',
+  'en-TZ':'TSh','en-GH':'GH₵','en-NG':'₦','en-ZA':'R','en-ET':'Br',
+  'en-RW':'RF','en-SN':'CFA','en-CM':'CFA','en-CI':'CFA','en-ML':'CFA',
+  'fr-SN':'CFA','fr-CM':'CFA','fr-CI':'CFA','fr-ML':'CFA','fr-BF':'CFA',
+  'sw-KE':'KSh','sw-TZ':'TSh','am-ET':'Br','rw-RW':'RF',
+  'en-US':'$','en-GB':'£','en-AU':'A$','en-CA':'CA$','de-DE':'€','fr-FR':'€',
+};
+const _localeCurrency = (() => {
+  try {
+    const locale = navigator.language || navigator.languages?.[0] || 'en-MW';
+    if(_currencyMap[locale]) return _currencyMap[locale];
+    // Try Intl API for full coverage
+    const intlCur = new Intl.NumberFormat(locale, {style:'currency',currency:
+      new Intl.NumberFormat(locale,{style:'currency',currency:'USD'})
+        .resolvedOptions().currency || 'USD'
+    }).resolvedOptions().currency;
+    // Map currency code to symbol
+    const symMap = {
+      MWK:'MK',ZMW:'ZMW',ZWL:'ZWL',KES:'KSh',UGX:'USh',TZS:'TSh',
+      GHS:'GH₵',NGN:'₦',ZAR:'R',ETB:'Br',RWF:'RF',XOF:'CFA',XAF:'CFA',
+      USD:'$',GBP:'£',EUR:'€',AUD:'A$',CAD:'CA$',INR:'₹',CNY:'¥',JPY:'¥',
+      BRL:'R$',MXN:'MX$',PKR:'₨',BDT:'৳',PHP:'₱',IDR:'Rp',MYR:'RM',
+      THB:'฿',VND:'₫',KRW:'₩',SGD:'S$',HKD:'HK$',NZD:'NZ$',CHF:'CHF',
+      SEK:'kr',NOK:'kr',DKK:'kr',PLN:'zł',CZK:'Kč',HUF:'Ft',TRY:'₺',
+      AED:'AED',SAR:'SR',QAR:'QR',KWD:'KD',BHD:'BD',OMR:'OMR',JOD:'JD',
+      EGP:'E£',MAD:'MAD',DZD:'DA',TND:'DT',LYD:'LD',SDG:'SDG',
+      KES:'KSh',TZS:'TSh',UGX:'USh',RWF:'RF',BIF:'FBu',SOS:'Sh',
+      MZN:'MT',BWP:'P',LSL:'L',SZL:'L',NAD:'N$',ZMW:'ZMW',AOA:'Kz',
+      GNF:'FG',SLL:'Le',LRD:'L$',GMD:'D',CVE:'$',STN:'Db',
+    };
+    return symMap[intlCur] || intlCur || 'MK';
+  } catch(e){ return 'MK'; }
+})();
+
 function calcPNL(){
+  const cur = _localeCurrency;
   const type = document.getElementById('pnl-type').value;
   document.getElementById('pnl-broiler-inputs').style.display = type === 'broiler' ? '' : 'none';
   document.getElementById('pnl-layer-inputs').style.display = type === 'layer' ? '' : 'none';
-  
-  const fmt = n => Math.round(n).toLocaleString();
+
+  // Update currency labels
+  document.querySelectorAll('.pnl-cur-lbl').forEach(el => el.textContent = cur);
+
+  const fmt = n => cur + ' ' + Math.round(n).toLocaleString();
   let revenue = 0, costs = 0;
 
   if(type === 'broiler'){
@@ -1576,8 +1654,8 @@ function calcPNL(){
     const survivors = chicks * (1 - mortPct/100);
     revenue = survivors * price;
     costs = (chicks * chickCost) + (bags * bagCost) + other;
-    document.getElementById('pnl-breakeven').textContent = 
-      `Break-even price: MK ${fmt(costs/survivors)} per bird (${Math.round(survivors)} birds to sell)`;
+    document.getElementById('pnl-breakeven').textContent =
+      `Break-even: ${fmt(survivors > 0 ? costs/survivors : 0)} per bird (${Math.round(survivors)} birds to sell)`;
   } else {
     const pullets = parseFloat(document.getElementById('pnl-pullets').value) || 0;
     const pulletCost = parseFloat(document.getElementById('pnl-pullet-cost').value) || 0;
@@ -1591,10 +1669,10 @@ function calcPNL(){
     const traysPerMonth = (eggsPerDay * 30) / 30;
     revenue = traysPerMonth * eggPrice * months;
     costs = (pullets * pulletCost) + (bags * bagCost * months) + (other * months);
-    document.getElementById('pnl-breakeven').textContent = 
+    document.getElementById('pnl-breakeven').textContent =
       `~${Math.round(eggsPerDay)} eggs/day → ${Math.round(traysPerMonth)} trays/month`;
   }
-  
+
   const profit = revenue - costs;
   const res = document.getElementById('pnl-result');
   res.style.display = 'block';
@@ -1603,6 +1681,7 @@ function calcPNL(){
   const profitEl = document.getElementById('pnl-profit');
   profitEl.textContent = (profit >= 0 ? '+' : '') + fmt(profit);
   profitEl.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('pnl-cur-label').textContent = cur;
 }
 
 // ════════════════════════════════════════════════════
@@ -1743,47 +1822,47 @@ init();
         <div id="pnl-broiler-inputs">
           <div class="fgr fg2">
             <div class="fg"><label class="fl">No. of Chicks</label><input class="fi" type="number" id="pnl-chicks" value="100" oninput="calcPNL()"/></div>
-            <div class="fg"><label class="fl">Cost per Chick (MK)</label><input class="fi" type="number" id="pnl-chick-cost" value="1500" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Cost per Chick (<span class="pnl-cur-lbl">MK</span>)</label><input class="fi" type="number" id="pnl-chick-cost" value="1500" oninput="calcPNL()"/></div>
           </div>
           <div class="fgr fg2">
             <div class="fg"><label class="fl">Bags of Feed</label><input class="fi" type="number" id="pnl-bags" value="15" oninput="calcPNL()"/></div>
-            <div class="fg"><label class="fl">Cost per Bag (MK)</label><input class="fi" type="number" id="pnl-bag-cost" value="45000" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Cost per Bag (<span class="pnl-cur-lbl">MK</span>)</label><input class="fi" type="number" id="pnl-bag-cost" value="45000" oninput="calcPNL()"/></div>
           </div>
           <div class="fgr fg2">
             <div class="fg"><label class="fl">Mortality (%)</label><input class="fi" type="number" id="pnl-mort-pct" value="5" oninput="calcPNL()"/></div>
-            <div class="fg"><label class="fl">Sale Price per Bird (MK)</label><input class="fi" type="number" id="pnl-price" value="12000" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Sale Price per Bird (<span class="pnl-cur-lbl">MK</span>)</label><input class="fi" type="number" id="pnl-price" value="12000" oninput="calcPNL()"/></div>
           </div>
-          <div class="fg"><label class="fl">Other Costs — vaccines, medication, etc. (MK)</label><input class="fi" type="number" id="pnl-other" value="5000" oninput="calcPNL()"/></div>
+          <div class="fg"><label class="fl">Other Costs — vaccines, medication, etc. (<span class="pnl-cur-lbl">MK</span>)</label><input class="fi" type="number" id="pnl-other" value="5000" oninput="calcPNL()"/></div>
         </div>
         <!-- LAYER INPUTS -->
         <div id="pnl-layer-inputs" style="display:none;">
           <div class="fgr fg2">
             <div class="fg"><label class="fl">No. of Pullets</label><input class="fi" type="number" id="pnl-pullets" value="50" oninput="calcPNL()"/></div>
-            <div class="fg"><label class="fl">Cost per Pullet (MK)</label><input class="fi" type="number" id="pnl-pullet-cost" value="3500" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Cost per Pullet (<span class="pnl-cur-lbl">MK</span>)</label><input class="fi" type="number" id="pnl-pullet-cost" value="3500" oninput="calcPNL()"/></div>
           </div>
           <div class="fgr fg2">
             <div class="fg"><label class="fl">Bags of Feed/Month</label><input class="fi" type="number" id="pnl-layer-bags" value="8" oninput="calcPNL()"/></div>
-            <div class="fg"><label class="fl">Cost per Bag (MK)</label><input class="fi" type="number" id="pnl-layer-bag-cost" value="45000" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Cost per Bag (<span class="pnl-cur-lbl">MK</span>)</label><input class="fi" type="number" id="pnl-layer-bag-cost" value="45000" oninput="calcPNL()"/></div>
           </div>
           <div class="fgr fg2">
             <div class="fg"><label class="fl">Laying Rate (%)</label><input class="fi" type="number" id="pnl-lay-rate" value="75" oninput="calcPNL()"/></div>
-            <div class="fg"><label class="fl">Egg Price per Tray (MK)</label><input class="fi" type="number" id="pnl-egg-price" value="3500" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Egg Price per Tray (<span class="pnl-cur-lbl">MK</span>)</label><input class="fi" type="number" id="pnl-egg-price" value="3500" oninput="calcPNL()"/></div>
           </div>
           <div class="fgr fg2">
             <div class="fg"><label class="fl">Months of Production</label><input class="fi" type="number" id="pnl-months" value="12" oninput="calcPNL()"/></div>
-            <div class="fg"><label class="fl">Other Costs/Month (MK)</label><input class="fi" type="number" id="pnl-layer-other" value="5000" oninput="calcPNL()"/></div>
+            <div class="fg"><label class="fl">Other Costs/Month (<span class="pnl-cur-lbl">MK</span>)</label><input class="fi" type="number" id="pnl-layer-other" value="5000" oninput="calcPNL()"/></div>
           </div>
         </div>
         <!-- RESULTS -->
         <div id="pnl-result" style="margin-top:18px;background:var(--bg3);border-radius:12px;padding:14px;display:none;">
           <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text1);">📊 Summary</div>
           <div class="fgr fg2" style="gap:8px;">
-            <div style="background:var(--bg2);border-radius:10px;padding:10px;text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--green);" id="pnl-revenue">—</div><div style="font-size:10px;color:var(--text3);">Revenue (MK)</div></div>
-            <div style="background:var(--bg2);border-radius:10px;padding:10px;text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--red);" id="pnl-costs">—</div><div style="font-size:10px;color:var(--text3);">Total Costs (MK)</div></div>
+            <div style="background:var(--bg2);border-radius:10px;padding:10px;text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--green);" id="pnl-revenue">—</div><div style="font-size:10px;color:var(--text3);">Revenue (<span id="pnl-cur-label">MK</span>)</div></div>
+            <div style="background:var(--bg2);border-radius:10px;padding:10px;text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--red);" id="pnl-costs">—</div><div style="font-size:10px;color:var(--text3);">Total Costs (<span class="pnl-cur-lbl">MK</span>)</div></div>
           </div>
           <div style="background:var(--bg2);border-radius:10px;padding:12px;text-align:center;margin-top:8px;">
             <div style="font-size:22px;font-weight:700;" id="pnl-profit">—</div>
-            <div style="font-size:11px;color:var(--text3);">Net Profit / Loss (MK)</div>
+            <div style="font-size:11px;color:var(--text3);">Net Profit / Loss (<span class="pnl-cur-lbl">MK</span>)</div>
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:10px;" id="pnl-breakeven"></div>
         </div>
