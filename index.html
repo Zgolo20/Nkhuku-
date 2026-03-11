@@ -511,7 +511,6 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
         <div class="tact">
           <button class="btn bg" onclick="openFlockModal()">+ Flock</button>
           <button class="btn bp" onclick="openFeedModal()">+ Log Today</button>
-          <button class="btn" style="background:#c0392b;color:#fff;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600;border:none;cursor:pointer;" onclick="openDashMortality()">💀 Mortality</button>
         </div>
       </div>
       <div class="pad">
@@ -560,7 +559,6 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
         <div class="tact">
           <button class="btn bg" onclick="sp('calcs')">Calculators</button>
           <button class="btn bp" onclick="openFeedModal()">+ Log Today</button>
-          <button class="btn" style="background:#c0392b;color:#fff;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600;border:none;cursor:pointer;" onclick="openDashMortality()">💀 Mortality</button>
         </div>
       </div>
       <div class="pad">
@@ -1178,10 +1176,27 @@ async function saveFeed(){
   if(!kg||!date){toast('⚠️','Date and feed amount required.');return;}
   const fsel=document.getElementById('fd-flock');
   const fname=fsel.options[fsel.selectedIndex]?.text||'—';
-  const{error}=await sb.from('feed_logs').insert({user_id:CU.id,flock_id:fsel.value||null,flock_name:fname,log_date:date,feed_kg:parseFloat(kg)||0,water_l:parseFloat(document.getElementById('fd-water').value)||0,deaths:parseInt(document.getElementById('fd-deaths').value)||0,avg_weight_kg:parseFloat(document.getElementById('fd-wt').value)||null,notes:document.getElementById('fd-notes').value.trim(),created_at:new Date().toISOString()});
+  const flockId=fsel.value||null;
+  const deaths=parseInt(document.getElementById('fd-deaths').value)||0;
+  const{error}=await sb.from('feed_logs').insert({user_id:CU.id,flock_id:flockId,flock_name:fname,log_date:date,feed_kg:parseFloat(kg)||0,water_l:parseFloat(document.getElementById('fd-water').value)||0,deaths,avg_weight_kg:parseFloat(document.getElementById('fd-wt').value)||null,notes:document.getElementById('fd-notes').value.trim(),created_at:new Date().toISOString()});
   if(error){toast('❌',error.message);return;}
-  cm('m-feed');toast('✅','Feed log saved!');logAudit('Logged feed',date+' — '+kg+'kg');
+  // Auto-update flock bird count if deaths logged
+  if(deaths>0&&flockId){
+    const{data:fl}=await sb.from('flocks').select('birds,health_status').eq('id',flockId).single();
+    if(fl){
+      const newCount=Math.max(0,(fl.birds||0)-deaths);
+      const lossPct=fl.birds>0?(deaths/fl.birds)*100:0;
+      const newHealth=lossPct>=15?'critical':lossPct>=8?'sick':lossPct>=3?'watch':fl.health_status;
+      await sb.from('flocks').update({birds:newCount,health_status:newHealth,updated_at:new Date().toISOString()}).eq('id',flockId);
+      logAudit('Mortality via feed log',`${deaths} deaths in ${fname}, flock updated to ${newCount} birds`);
+    }
+  }
+  cm('m-feed');
+  const msg=deaths>0?`Feed logged. ${deaths} death${deaths>1?'s':''} recorded, flock updated.`:'Feed log saved!';
+  toast('✅',msg);
+  logAudit('Logged feed',date+' — '+kg+'kg');
   loadFeed();loadDash();
+  if(curPage==='flocks')loadFlocks();
 }
 async function loadFeed(){
   const{data}=await sb.from('feed_logs').select('*').eq('user_id',CU.id).order('log_date',{ascending:false});
@@ -1482,10 +1497,6 @@ function sendBroadcast(){
 // ════════════════════════════════════════════════════
 
 
-async function openDashMortality(){
-  // Populate flock select in mortality modal
-  const {data} = await sb.from('flocks').select('id,name,birds').eq('user_id',CU.id).eq('active',true);
-  if(!data||!data.length){ toast('⚠️','No active flocks found.'); return; }
   
   // Build flock selector if not already there
   let sel = document.getElementById('mort-flock-sel');
@@ -1521,44 +1532,7 @@ async function openDashMortality(){
 // ════════════════════════════════════════════════════
 // MORTALITY
 // ════════════════════════════════════════════════════
-function openMortalityModal(flockId, flockName, currentBirds){
-  document.getElementById('mort-flock-id').value = flockId;
-  document.getElementById('mort-flock-name').value = flockName;
-  document.getElementById('mort-count').value = '';
-  document.getElementById('mort-date').valueAsDate = new Date();
-  document.getElementById('mort-cause').value = 'unknown';
-  document.getElementById('mort-notes').value = '';
-  document.getElementById('mort-health-update').style.display = 'none';
-  document.getElementById('mort-preview').textContent = `Current: ${currentBirds} birds`;
-  document.getElementById('mort-count')._max = currentBirds;
-  om('m-mortality');
-}
-document.addEventListener('DOMContentLoaded', () => {
-  const mortCount = document.getElementById('mort-count');
-  if(mortCount) mortCount.addEventListener('input', () => {
-    const n = parseInt(mortCount.value) || 0;
-    const max = mortCount._max || 0;
-    const remaining = max - n;
-    const pct = max > 0 ? ((n/max)*100).toFixed(1) : 0;
-    document.getElementById('mort-preview').textContent = 
-      n > 0 ? `${n} birds died → ${remaining} remaining (${pct}% loss)` : `Current: ${max} birds`;
-    const healthDiv = document.getElementById('mort-health-update');
-    if(n > 0 && pct >= 2){
-      healthDiv.style.display = 'block';
-      const sel = document.getElementById('mort-health');
-      if(pct >= 15) sel.value = 'critical';
-      else if(pct >= 8) sel.value = 'sick';
-      else if(pct >= 3) sel.value = 'watch';
-      else sel.value = 'good';
-    } else {
-      healthDiv.style.display = 'none';
-    }
-  });
 });
-async function saveMortality(){
-  const flockId = document.getElementById('mort-flock-id').value;
-  const n = parseInt(document.getElementById('mort-count').value);
-  if(!n || n < 1){ toast('⚠️','Enter number of birds that died.'); return; }
   const max = document.getElementById('mort-count')._max || 0;
   if(n > max){ toast('⚠️',`Cannot exceed current flock size (${max}).`); return; }
   const cause = document.getElementById('mort-cause').value;
@@ -1766,44 +1740,6 @@ function sendBroadcastTo(uid, name){
 init();
 </script>
 
-    <!-- MORTALITY MODAL -->
-    <div class="modal" id="m-mortality">
-      <div class="mbox">
-        <div class="mhdr"><span class="mtitle">💀 Log Mortality</span><button class="mclose" onclick="cm('m-mortality')">✕</button></div>
-        <div class="mbd">
-          <input type="hidden" id="mort-flock-id"/>
-          <div class="fg"><label class="fl">Flock</label><input class="fi" id="mort-flock-name" disabled/></div>
-          <div class="fgr fg2">
-            <div class="fg"><label class="fl">Birds Died</label><input class="fi" type="number" id="mort-count" min="1" placeholder="0"/></div>
-            <div class="fg"><label class="fl">Date</label><input class="fi" type="date" id="mort-date"/></div>
-          </div>
-          <div class="fg"><label class="fl">Cause of Death</label>
-            <select class="fi" id="mort-cause">
-              <option value="unknown">Unknown</option>
-              <option value="disease">Disease</option>
-              <option value="predator">Predator attack</option>
-              <option value="accident">Accident / injury</option>
-              <option value="starvation">Starvation / dehydration</option>
-              <option value="heat">Heat stress</option>
-              <option value="cold">Cold / exposure</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          <div class="fg"><label class="fl">Notes (optional)</label><textarea class="fi" id="mort-notes" rows="2" placeholder="Any observations…"></textarea></div>
-          <div id="mort-health-update" style="background:rgba(255,100,100,.08);border:1px solid rgba(255,100,100,.2);border-radius:10px;padding:10px;margin-top:6px;display:none;">
-            <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">⚠️ Auto-update flock health status:</div>
-            <select class="fi" id="mort-health" style="font-size:12px;">
-              <option value="good">Good</option>
-              <option value="watch">Watch</option>
-              <option value="sick">Sick</option>
-              <option value="critical">Critical</option>
-            </select>
-          </div>
-          <div id="mort-preview" style="font-size:12px;color:var(--text3);margin-top:8px;"></div>
-          <button class="btn bp" style="width:100%;margin-top:12px;" onclick="saveMortality()">Save Mortality Record</button>
-        </div>
-      </div>
-    </div>
 
     <!-- P&L CALCULATOR MODAL -->
     <div class="mvw" id="mv-pnl">
