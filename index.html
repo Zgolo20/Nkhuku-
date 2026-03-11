@@ -290,6 +290,10 @@ td{padding:9px 13px;color:var(--text);vertical-align:middle}
 body.offline #offline-banner{display:block;}
 body.offline .main{padding-top:32px;}
 
+
+/* vaccine badge pulse */
+#vax-badge { animation: badgePulse 2s infinite; }
+@keyframes badgePulse { 0%,100%{opacity:1} 50%{opacity:.5} }
 </style>
 <meta name="theme-color" content="#0c0f0a"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -529,7 +533,7 @@ body.offline .main{padding-top:32px;}
       <div class="nsec">Farmer</div>
       <button class="nb active" onclick="sp('dashboard')" data-page="dashboard"><span class="ic">🏠</span>Dashboard</button>
       <button class="nb" onclick="sp('flocks')" data-page="flocks"><span class="ic">🐔</span>My Flocks</button>
-      <button class="nb" onclick="sp('vaccines')" data-page="vaccines"><span class="ic">💉</span>Vaccines</button>
+      <button class="nb" onclick="sp('vaccines')" data-page="vaccines"><span class="ic">💉</span>Vaccines<span id="vax-badge" style="display:none;background:#e74c3c;color:#fff;border-radius:8px;font-size:10px;font-weight:700;padding:1px 5px;margin-left:5px;" id="vax-badge"></span></button>
       <button class="nb" onclick="sp('feed')" data-page="feed"><span class="ic">🌾</span>Feed & Water</button>
       <button class="nb" onclick="sp('notes')" data-page="notes"><span class="ic">📝</span>Observations</button>
       <button class="nb" onclick="sp('calcs')" data-page="calcs"><span class="ic">📦</span>Calculators</button>
@@ -905,7 +909,9 @@ async function doRegister(){
   setBtn('reg-btn',false,'','Create Account');
   if(error){showErr(error.message);return;}
   if(data.user){
-    await sb.from('profiles').upsert({id:data.user.id,full_name:name,email,phone,region,flock_type:ftype,currency,role:'farmer',created_at:new Date().toISOString()});
+    await sb.from('profiles').upsert({id:data.user.id,full_name:name,email,phone,region,flock_type:ftype,role:'farmer',created_at:new Date().toISOString()});
+    // Save currency separately (column may need migration)
+    if(currency) sb.from('profiles').update({currency}).eq('id',data.user.id).then(()=>{});
     if(!data.session){showOk('✅ Account created! Check your email to confirm, then sign in.');switchTab('login');}
     else await loginOk(data.user);
   }
@@ -1197,6 +1203,7 @@ async function saveVax(){
   loadVax();loadDash();
 }
 async function loadVax(){
+  checkVaccineNotifs();
   const{data}=await sb.from('vaccines').select('*').eq('user_id',CU.id).order('due_date',{ascending:true});
   const od=(data||[]).filter(v=>v.status==='overdue').length;
   const ds=(data||[]).filter(v=>v.status==='due-soon').length;
@@ -1722,7 +1729,7 @@ function openProfile(){
   // Update notification button label
   const nb = document.getElementById('notif-toggle-btn');
   if(nb){
-    if(!('Notification' in window)){ nb.textContent='🔕 Not supported'; nb.disabled=true; }
+    if(!('Notification' in window)){ nb.textContent='🔕 Use browser app for push alerts'; nb.style.color='var(--text3)'; }
     else if(Notification.permission==='granted'){ nb.textContent='🔔 Notifications ON ✓'; nb.style.background='rgba(46,204,113,.15)'; nb.style.color='var(--green)'; }
     else if(Notification.permission==='denied'){ nb.textContent='🚫 Blocked in settings'; nb.style.background=''; }
     else { nb.textContent='🔔 Enable Vaccine Reminders'; nb.style.background=''; nb.style.color=''; }
@@ -1793,7 +1800,6 @@ function sendLocalNotif(title, body, tag='nkhuku'){
 
 async function checkVaccineNotifs(){
   if(!CU) return;
-  if(Notification.permission !== 'granted') return;
   const {data} = await sb.from('vaccines').select('*').eq('user_id', CU.id);
   if(!data) return;
   const today = new Date(); today.setHours(0,0,0,0);
@@ -1806,18 +1812,45 @@ async function checkVaccineNotifs(){
     return d <= soon && d >= today;
   });
 
-  if(overdue.length > 0){
-    sendLocalNotif(
-      '🔴 Overdue Vaccines — Nkhuku',
-      `${overdue.length} vaccine${overdue.length>1?'s are':' is'} overdue: ${overdue.map(v=>v.vaccine_name).join(', ')}`,
-      'vax-overdue'
-    );
-  } else if(dueSoon.length > 0){
-    sendLocalNotif(
-      '🟡 Vaccines Due Soon — Nkhuku',
-      `${dueSoon.length} vaccine${dueSoon.length>1?'s':''} due in the next 3 days: ${dueSoon.map(v=>v.vaccine_name).join(', ')}`,
-      'vax-soon'
-    );
+  const urgent = overdue.length + dueSoon.length;
+
+  // ── Update nav badge ──
+  const badge = document.getElementById('vax-badge');
+  if(badge){
+    if(urgent > 0){ badge.textContent = urgent; badge.style.display = 'inline'; }
+    else { badge.style.display = 'none'; }
+  }
+
+  // ── Update dashboard banner ──
+  const banner = document.getElementById('vax-reminder-banner');
+  const bannerTitle = document.getElementById('vax-banner-title');
+  const bannerBody = document.getElementById('vax-banner-body');
+  if(banner){
+    if(overdue.length > 0){
+      banner.style.display = 'block';
+      bannerTitle.textContent = '🔴 Overdue Vaccines!';
+      bannerBody.textContent = `${overdue.length} vaccine${overdue.length>1?'s are':' is'} overdue: ${overdue.map(v=>v.vaccine_name).join(', ')}`;
+    } else if(dueSoon.length > 0){
+      banner.style.display = 'block';
+      banner.style.background = 'linear-gradient(135deg,#b7791f,#d97706)';
+      bannerTitle.textContent = '🟡 Vaccines Due Soon';
+      bannerBody.textContent = `${dueSoon.length} vaccine${dueSoon.length>1?'s':''} due in 3 days: ${dueSoon.map(v=>v.vaccine_name).join(', ')}`;
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  // ── Push notification (only if permission granted) ──
+  if(Notification.permission === 'granted'){
+    if(overdue.length > 0){
+      sendLocalNotif('🔴 Overdue Vaccines — Nkhuku',
+        `${overdue.length} vaccine${overdue.length>1?'s are':' is'} overdue: ${overdue.map(v=>v.vaccine_name).join(', ')}`,
+        'vax-overdue');
+    } else if(dueSoon.length > 0){
+      sendLocalNotif('🟡 Vaccines Due Soon — Nkhuku',
+        `${dueSoon.length} vaccine${dueSoon.length>1?'s':''} due in 3 days: ${dueSoon.map(v=>v.vaccine_name).join(', ')}`,
+        'vax-soon');
+    }
   }
 }
 
